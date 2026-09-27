@@ -36,7 +36,7 @@ O conceito completo (mercado, monetização e plano) está em [`docs/IDEIA_DO_JO
 - Luva do **Tapa**: derruba o kaiju de quem está carregando. Kaiju derrubado volta para casa em 15 s.
 - Esteira automática (o boneco corre sozinho; pule para sair) com upgrades, largar o kaiju (tecla **G**), desbloqueio de espaços na base, venda de kaiju (tecla **F**).
 - HUD no estilo dos "Steal a …": botões Comprar / Base / Vender, Modo Lento [Q], dinheiro e velocidade grandes, ganhos subindo na tela.
-- Índice (coleção com prévia 3D e silhuetas), Renascimento (+50% de renda por renascimento), presente a cada 10 min, recompensa diária com sequência.
+- Índice por zona e por mutação (prévia 3D, silhuetas e barras de progresso), Renascimento "x1 ➜ x1.5 Dinheiro", painel "Minha base" (remover, colocar, Equipar Melhor, depósito de 50), presente a cada 10 min, recompensa diária com sequência.
 - Bônus de renda: +10% por amigo no servidor (até 50%) e +10% para Premium. Evento "Hora dos Raros" a cada 20 min.
 - Salvamento no DataStore, renda e crescimento offline (até 2 h, 50% da renda), anúncio de kaiju raro para o servidor.
 

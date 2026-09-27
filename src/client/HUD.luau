@@ -3,6 +3,7 @@
 -- direita: Índice, Renascimento e Presentes; embaixo: bônus, diário e próximo evento.
 -- Também mostra o aviso de carregando, notificações e anúncios.
 
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -144,15 +145,12 @@ local function iconButton(parent: Instance, icon: string, name: string, color: C
 		b,
 		{ Position = UDim2.fromScale(0.15, 0.06), Size = UDim2.fromScale(0.7, 0.6), Text = icon, StrokeThickness = 0 }
 	)
-	label(
-		b,
-		{
-			Position = UDim2.fromScale(0.04, 0.66),
-			Size = UDim2.fromScale(0.92, 0.3),
-			Text = name,
-			StrokeThickness = 2.5,
-		}
-	)
+	label(b, {
+		Position = UDim2.fromScale(0.04, 0.66),
+		Size = UDim2.fromScale(0.92, 0.3),
+		Text = name,
+		StrokeThickness = 2.5,
+	})
 	b.Parent = parent
 	return b
 end
@@ -201,12 +199,19 @@ local function togglePanel(name: string)
 	p.Refresh()
 end
 
-local function createPanel(root: Instance, name: string, title: string, color: Color3, refresh: (ScrollingFrame) -> ())
+local function createPanel(
+	root: Instance,
+	name: string,
+	title: string,
+	color: Color3,
+	refresh: (ScrollingFrame) -> (),
+	size: Vector2?
+)
 	local frame = Instance.new("Frame")
 	frame.Name = name
 	frame.AnchorPoint = Vector2.new(0.5, 0.5)
 	frame.Position = UDim2.fromScale(0.5, 0.52)
-	frame.Size = UDim2.fromOffset(600, 470)
+	frame.Size = if size then UDim2.fromOffset(size.X, size.Y) else UDim2.fromOffset(600, 470)
 	frame.BackgroundColor3 = COLORS.panel
 	frame.Visible = false
 	frame.ZIndex = 10
@@ -463,97 +468,425 @@ local function discoveredSet(): { [string]: boolean }
 	return set
 end
 
-local function refreshIndex(content: ScrollingFrame)
-	clearContent(content, "grid")
-	local known = discoveredSet()
-	local order = 0
-	for _, def in KaijuData.List do
-		order += 1
-		local found = known[def.Id] == true
-		local rarity = Config.Rarities[def.Rarity]
-		local cell = Instance.new("Frame")
-		cell.BackgroundColor3 = COLORS.row
-		cell.LayoutOrder = order
-		cell.ZIndex = 10
-		corner(cell, 12)
-		local stroke = Instance.new("UIStroke")
-		stroke.Thickness = 3
-		stroke.Color = if found then rarity.Color else Color3.fromRGB(70, 75, 90)
-		stroke.Parent = cell
-
-		local viewport = Instance.new("ViewportFrame")
-		viewport.Position = UDim2.fromOffset(8, 8)
-		viewport.Size = UDim2.new(1, -16, 0, 120)
-		viewport.BackgroundTransparency = 1
-		viewport.ZIndex = 11
-		viewport.Ambient = Color3.fromRGB(200, 200, 200)
-		viewport.LightDirection = Vector3.new(-1, -1, -1)
-		local model = KaijuModel.build(def, "Normal")
-		for _, d in model:GetDescendants() do
-			if d:IsA("ParticleEmitter") or d:IsA("PointLight") then
-				d:Destroy()
-			elseif d:IsA("BasePart") and not found then
-				d.Color = Color3.fromRGB(15, 15, 20)
-				d.Material = Enum.Material.SmoothPlastic
-				d.Transparency = if d.Name == "Root" then 1 else 0
+local function discoveredMutations(): { [string]: { [string]: boolean } }
+	local result = {}
+	for group in string.gmatch(player:GetAttribute("DiscoveredMutations") or "", "[^;]+") do
+		local mutation, ids = string.match(group, "^([^:]+):(.*)$")
+		if mutation then
+			result[mutation] = {}
+			for id in string.gmatch(ids, "[^,]+") do
+				result[mutation][id] = true
 			end
 		end
-		model:PivotTo(CFrame.Angles(0, math.rad(200), 0))
-		model.Parent = viewport
-		local camera = Instance.new("Camera")
-		local size = model:GetExtentsSize()
-		local distance = math.max(size.X, size.Y, size.Z) * 1.7
-		camera.CFrame =
-			CFrame.lookAt(Vector3.new(distance * 0.5, size.Y * 0.8, -distance), Vector3.new(0, size.Y * 0.45, 0))
-		camera.FieldOfView = 40
-		camera.Parent = viewport
-		viewport.CurrentCamera = camera
-		viewport.Parent = cell
-
-		label(cell, {
-			Position = UDim2.fromOffset(6, 130),
-			Size = UDim2.new(1, -12, 0, 28),
-			Text = if found then def.Name else "???",
-			ZIndex = 11,
-		})
-		label(cell, {
-			Position = UDim2.fromOffset(6, 158),
-			Size = UDim2.new(1, -12, 0, 22),
-			Text = def.Rarity,
-			TextColor3 = rarity.Color,
-			StrokeThickness = 2,
-			ZIndex = 11,
-		})
-		cell.Parent = content
 	end
+	return result
+end
+
+-- Cor de fundo das cartas por raridade (estilo das referências)
+local CARD_COLORS = {
+	Comum = Color3.fromRGB(70, 190, 80),
+	Incomum = Color3.fromRGB(40, 185, 165),
+	Raro = Color3.fromRGB(50, 130, 250),
+	["Épico"] = Color3.fromRGB(160, 70, 245),
+	["Lendário"] = Color3.fromRGB(250, 160, 30),
+	["Mítico"] = Color3.fromRGB(225, 55, 60),
+	Secreto = Color3.fromRGB(35, 35, 40),
+}
+
+-- Zona "casa" de cada kaiju: onde a raridade dele tem mais peso
+local function homeZoneIndex(def): number
+	local best, bestWeight = 1, -1
+	for i, zone in Config.Zones do
+		local total = 0
+		for _, w in zone.Weights do
+			total += w
+		end
+		local share = (zone.Weights[def.Rarity] or 0) / total
+		if share > bestWeight then
+			best, bestWeight = i, share
+		end
+	end
+	return best
+end
+
+-- Carta com prévia 3D. Sem descobrir: silhueta preta e "???".
+local function kaijuCard(parent: Instance, def, found: boolean, mutation: string, order: number)
+	local cell = Instance.new("Frame")
+	cell.BackgroundColor3 = CARD_COLORS[def.Rarity] or COLORS.row
+	cell.LayoutOrder = order
+	corner(cell, 10)
+	outline(cell, 3)
+	shade(cell)
+	local viewport = Instance.new("ViewportFrame")
+	viewport.Position = UDim2.fromScale(0.05, 0.14)
+	viewport.Size = UDim2.fromScale(0.9, 0.66)
+	viewport.BackgroundTransparency = 1
+	viewport.Ambient = Color3.fromRGB(200, 200, 200)
+	viewport.LightDirection = Vector3.new(-1, -1, -1)
+	local model = KaijuModel.build(def, if found then mutation else "Normal")
+	for _, d in model:GetDescendants() do
+		if d:IsA("ParticleEmitter") or d:IsA("PointLight") then
+			d:Destroy()
+		elseif d:IsA("BasePart") and not found then
+			d.Color = Color3.fromRGB(10, 10, 12)
+			d.Material = Enum.Material.SmoothPlastic
+			d.Reflectance = 0
+			d.Transparency = if d.Name == "Root" then 1 else 0
+		end
+	end
+	model:PivotTo(CFrame.Angles(0, math.rad(200), 0))
+	model.Parent = viewport
+	local camera = Instance.new("Camera")
+	local size = model:GetExtentsSize()
+	local distance = math.max(size.X, size.Y, size.Z) * 1.6
+	camera.CFrame =
+		CFrame.lookAt(Vector3.new(distance * 0.5, size.Y * 0.8, -distance), Vector3.new(0, size.Y * 0.45, 0))
+	camera.FieldOfView = 40
+	camera.Parent = viewport
+	viewport.CurrentCamera = camera
+	viewport.Parent = cell
+	label(cell, {
+		Position = UDim2.fromScale(0.05, 0.02),
+		Size = UDim2.fromScale(0.9, 0.16),
+		Text = def.Rarity,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
+	label(cell, {
+		Position = UDim2.fromScale(0.05, 0.8),
+		Size = UDim2.fromScale(0.9, 0.17),
+		Text = if found then def.Name else "???",
+		TextXAlignment = Enum.TextXAlignment.Right,
+	})
+	cell.Parent = parent
+end
+
+local function progressBar(
+	parent: Instance,
+	order: number,
+	value: number,
+	total: number,
+	width: UDim,
+	textOverride: string?
+): Frame
+	local bar = Instance.new("Frame")
+	bar.Size = UDim2.new(width, UDim.new(0, 40))
+	bar.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+	bar.LayoutOrder = order
+	corner(bar, 8)
+	outline(bar, 3)
+	local fill = Instance.new("Frame")
+	fill.Size = UDim2.fromScale(if total > 0 then math.clamp(value / total, 0, 1) else 0, 1)
+	fill.BackgroundColor3 = Color3.fromRGB(40, 220, 40)
+	corner(fill, 8)
+	fill.Parent = bar
+	label(bar, {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.9, 0.8),
+		Text = textOverride or string.format("%d/%d", value, total),
+		ZIndex = 2,
+	})
+	bar.Parent = parent
+	return bar
+end
+
+local function sectionBanner(parent: Instance, order: number, text: string, color: Color3)
+	local banner = Instance.new("Frame")
+	banner.Size = UDim2.new(1, -12, 0, 50)
+	banner.BackgroundColor3 = color
+	banner.LayoutOrder = order
+	corner(banner, 8)
+	outline(banner, 3)
+	shade(banner)
+	label(banner, { Position = UDim2.fromScale(0.05, 0.12), Size = UDim2.fromScale(0.9, 0.76), Text = text })
+	banner.Parent = parent
+end
+
+local function cardGrid(parent: Instance, order: number, count: number, cardSize: Vector2): Frame
+	local columns = 5
+	local rows = math.max(1, math.ceil(count / columns))
+	local grid = Instance.new("Frame")
+	grid.BackgroundTransparency = 1
+	grid.LayoutOrder = order
+	grid.Size = UDim2.new(1, -12, 0, rows * (cardSize.Y + 10))
+	local layout = Instance.new("UIGridLayout")
+	layout.CellSize = UDim2.fromOffset(cardSize.X, cardSize.Y)
+	layout.CellPadding = UDim2.fromOffset(10, 10)
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = grid
+	grid.Parent = parent
+	return grid
+end
+
+local indexTab = "mundo"
+
+local function refreshIndex(content: ScrollingFrame)
+	clearContent(content)
+	local known = discoveredSet()
+	local total, found = #KaijuData.List, 0
+	for _, def in KaijuData.List do
+		if known[def.Id] then
+			found += 1
+		end
+	end
+
+	-- topo: abas + contagem
+	local top = Instance.new("Frame")
+	top.Size = UDim2.new(1, -12, 0, 56)
+	top.BackgroundTransparency = 1
+	top.LayoutOrder = 1
+	top.Parent = content
+	local tabs = {
+		{ Id = "mundo", Text = "Mundo", Color = COLORS.blue },
+		{ Id = "mutacoes", Text = "Mutações", Color = COLORS.yellow },
+	}
+	for i, tab in tabs do
+		local b = chunkyButton(
+			top,
+			tab.Text,
+			if indexTab == tab.Id then tab.Color else COLORS.gray,
+			UDim2.fromOffset(170, 50)
+		)
+		b.Position = UDim2.fromOffset((i - 1) * 182, 0)
+		b.Activated:Connect(function()
+			indexTab = tab.Id
+			panels.index.Refresh()
+		end)
+	end
+	label(top, {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 0),
+		Size = UDim2.fromOffset(360, 26),
+		Text = string.format("%d/%d descobertos", found, total),
+		TextXAlignment = Enum.TextXAlignment.Right,
+	})
+	label(top, {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 26),
+		Size = UDim2.fromOffset(360, 30),
+		Text = string.format("%d%% completo", math.floor(found / total * 100)),
+		TextColor3 = Color3.fromRGB(110, 255, 90),
+		TextXAlignment = Enum.TextXAlignment.Right,
+	})
+
+	local order = 1
+	if indexTab == "mundo" then
+		for zoneIndex, zone in Config.Zones do
+			local defs = {}
+			for _, def in KaijuData.List do
+				if homeZoneIndex(def) == zoneIndex then
+					table.insert(defs, def)
+				end
+			end
+			if #defs > 0 then
+				order += 1
+				sectionBanner(content, order, zone.Name, zone.Color:Lerp(Color3.new(1, 1, 1), 0.1))
+				order += 1
+				local grid = cardGrid(content, order, #defs, Vector2.new(140, 150))
+				local zoneFound = 0
+				for i, def in defs do
+					local isFound = known[def.Id] == true
+					if isFound then
+						zoneFound += 1
+					end
+					kaijuCard(grid, def, isFound, "Normal", i)
+				end
+				order += 1
+				progressBar(content, order, zoneFound, #defs, UDim.new(0.6, 0))
+			end
+		end
+	else
+		local byMutation = discoveredMutations()
+		for _, mutation in Config.Mutations do
+			if mutation.Name ~= "Normal" then
+				local set = byMutation[mutation.Name] or {}
+				local count = 0
+				for _ in set do
+					count += 1
+				end
+				order += 1
+				sectionBanner(
+					content,
+					order,
+					string.format("✦ %s (x%d) ✦", mutation.Name, mutation.Mult),
+					mutation.Label or COLORS.gray
+				)
+				order += 1
+				local grid = cardGrid(content, order, total, Vector2.new(140, 150))
+				for i, def in KaijuData.List do
+					kaijuCard(grid, def, set[def.Id] == true, mutation.Name, i)
+				end
+				order += 1
+				progressBar(content, order, count, total, UDim.new(0.6, 0))
+			end
+		end
+	end
+
+	order += 1
+	label(content, {
+		Size = UDim2.new(1, -12, 0, 34),
+		LayoutOrder = order,
+		Text = "Descubra todos os kaijus!",
+	})
+	order += 1
+	progressBar(content, order, found, total, UDim.new(1, -12), string.format("%d / %d", found, total))
 end
 
 local function refreshRebirth(content: ScrollingFrame)
 	clearContent(content)
 	local rebirths = player:GetAttribute("Rebirths") or 0
 	local cost = Config.rebirthCost(rebirths)
-	local bonusNow = rebirths * Config.Rebirth.IncomeBonus * 100
-	local bonusNext = (rebirths + 1) * Config.Rebirth.IncomeBonus * 100
-	row(
-		content,
-		1,
-		string.format("🔄 Renascimentos: %d", rebirths),
-		string.format("Bônus de renda atual: +%d%%", bonusNow)
+	local cash = player:GetAttribute("Cash") or 0
+	local now = 1 + rebirths * Config.Rebirth.IncomeBonus
+	local nextMult = now + Config.Rebirth.IncomeBonus
+	local function mult(value: number): string
+		return "x" .. (string.gsub(string.format("%.1f", value), "%.0$", ""))
+	end
+
+	label(content, {
+		Size = UDim2.new(1, -12, 0, 54),
+		LayoutOrder = 1,
+		Text = "O renascimento zera seu dinheiro, sua velocidade e o nível da esteira!",
+		TextColor3 = Color3.fromRGB(255, 70, 60),
+		TextWrapped = true,
+	})
+	label(content, { Size = UDim2.new(1, -12, 0, 54), LayoutOrder = 2, Text = "Você receberá:" })
+
+	local trade = Instance.new("Frame")
+	trade.Size = UDim2.new(1, -12, 0, 110)
+	trade.BackgroundTransparency = 1
+	trade.LayoutOrder = 3
+	trade.Parent = content
+	label(
+		trade,
+		{ Position = UDim2.fromScale(0, 0.1), Size = UDim2.fromScale(0.12, 0.8), Text = "💵", StrokeThickness = 0 }
 	)
-	row(
-		content,
-		2,
-		string.format("Próximo: +%d%% de renda", bonusNext),
-		"Custa " .. Format.money(cost),
-		"Renascer",
-		if (player:GetAttribute("Cash") or 0) >= cost then COLORS.purple else COLORS.gray,
-		function()
-			action("rebirth")
-			task.delay(0.3, panels.rebirth.Refresh)
-		end
+	label(trade, {
+		Position = UDim2.fromScale(0.12, 0),
+		Size = UDim2.fromScale(0.3, 1),
+		Text = mult(now) .. "\nDinheiro",
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
+	label(
+		trade,
+		{
+			Position = UDim2.fromScale(0.43, 0.2),
+			Size = UDim2.fromScale(0.12, 0.6),
+			Text = "➜",
+			TextColor3 = Color3.fromRGB(120, 200, 255),
+		}
 	)
-	note(content, 3, "Zera: dinheiro, velocidade e nível da esteira.")
-	note(content, 4, "Mantém: seus kaijus, espaços da base e o Índice.")
+	label(
+		trade,
+		{ Position = UDim2.fromScale(0.57, 0.1), Size = UDim2.fromScale(0.12, 0.8), Text = "💵", StrokeThickness = 0 }
+	)
+	label(trade, {
+		Position = UDim2.fromScale(0.69, 0),
+		Size = UDim2.fromScale(0.31, 1),
+		Text = mult(nextMult) .. "\nDinheiro",
+		TextColor3 = Color3.fromRGB(110, 255, 90),
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
+
+	progressBar(
+		content,
+		4,
+		cash,
+		cost,
+		UDim.new(1, -12),
+		string.format("%s / %s", Format.money(cash), Format.money(cost))
+	)
+
+	local buttons = Instance.new("Frame")
+	buttons.Size = UDim2.new(1, -12, 0, 76)
+	buttons.BackgroundTransparency = 1
+	buttons.LayoutOrder = 5
+	buttons.Parent = content
+	local b =
+		chunkyButton(buttons, "Renascer", if cash >= cost then COLORS.red else COLORS.gray, UDim2.fromOffset(260, 68))
+	b.AnchorPoint = Vector2.new(0.5, 0)
+	b.Position = UDim2.fromScale(0.5, 0)
+	b.Activated:Connect(function()
+		action("rebirth")
+		task.delay(0.3, panels.rebirth.Refresh)
+	end)
+	note(content, 6, string.format("Renascimentos: %d • Seus kaijus e espaços da base continuam.", rebirths))
+end
+
+-- Painel "Minha base": o que está nos pedestais e o que está guardado no depósito
+local function refreshBase(content: ScrollingFrame)
+	clearContent(content)
+	local placed = ownKaijus()
+	local ok, storage = pcall(function()
+		return HttpService:JSONDecode(player:GetAttribute("Storage") or "[]")
+	end)
+	if not ok then
+		storage = {}
+	end
+	local slots = player:GetAttribute("SlotsUnlocked") or Config.StartingSlots
+
+	local top = Instance.new("Frame")
+	top.Size = UDim2.new(1, -12, 0, 60)
+	top.BackgroundColor3 = COLORS.orange
+	top.LayoutOrder = 1
+	corner(top, 10)
+	outline(top, 3)
+	shade(top)
+	top.Parent = content
+	label(top, {
+		Position = UDim2.fromOffset(14, 8),
+		Size = UDim2.new(0.6, -14, 0, 44),
+		Text = string.format("🐾 %d/%d colocados • %d no total", #placed, slots, #placed + #storage),
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
+	local best = chunkyButton(top, "Equipar Melhor", COLORS.green, UDim2.new(0.36, 0, 0, 48))
+	best.AnchorPoint = Vector2.new(1, 0.5)
+	best.Position = UDim2.new(1, -8, 0.5, 0)
+	best.Activated:Connect(function()
+		action("equipbest")
+		task.delay(0.4, panels.base.Refresh)
+	end)
+
+	local order = 1
+	for _, model in placed do
+		order += 1
+		local uid = model:GetAttribute("KaijuUid")
+		row(
+			content,
+			order,
+			model:GetAttribute("KaijuName") or model.Name,
+			string.format(
+				"%s • %s/s • na base",
+				model:GetAttribute("StageName") or "",
+				Format.money(model:GetAttribute("Income") or 0)
+			),
+			"REMOVER",
+			COLORS.red,
+			function()
+				action("remove", uid)
+				task.delay(0.3, panels.base.Refresh)
+			end
+		)
+	end
+	for _, item in storage do
+		order += 1
+		row(
+			content,
+			order,
+			item.Name,
+			string.format("%s • %s/s • no depósito", item.Stage, Format.money(item.Income)),
+			"COLOCAR",
+			COLORS.green,
+			function()
+				action("place", item.Index)
+				task.delay(0.3, panels.base.Refresh)
+			end
+		)
+	end
+	if #placed + #storage == 0 then
+		note(content, 2, "Você ainda não tem kaijus. Roube um nos ninhos das zonas!")
+	end
 end
 
 local function giftSecondsLeft(): number
@@ -746,7 +1079,7 @@ function HUD.start()
 	local right = Instance.new("Frame")
 	right.AnchorPoint = Vector2.new(1, 0.5)
 	right.Position = UDim2.new(1, -24, 0.5, 0)
-	right.Size = UDim2.fromOffset(104, 340)
+	right.Size = UDim2.fromOffset(104, 460)
 	right.BackgroundTransparency = 1
 	right.Parent = gui
 	local rightLayout = Instance.new("UIListLayout")
@@ -759,7 +1092,10 @@ function HUD.start()
 	iconButton(right, "🔄", "Renascer", COLORS.purple, 2).Activated:Connect(function()
 		togglePanel("rebirth")
 	end)
-	local giftButton = iconButton(right, "🎁", "Presente", COLORS.red, 3)
+	iconButton(right, "🦖", "Kaijus", COLORS.orange, 3).Activated:Connect(function()
+		togglePanel("base")
+	end)
+	local giftButton = iconButton(right, "🎁", "Presente", COLORS.red, 4)
 	giftButton.Activated:Connect(function()
 		togglePanel("gift")
 	end)
@@ -860,8 +1196,9 @@ function HUD.start()
 	-- painéis
 	createPanel(gui, "buy", "🛒 Comprar", COLORS.blue, refreshBuy)
 	createPanel(gui, "sell", "💰 Vender", COLORS.red, refreshSell)
-	createPanel(gui, "index", "📖 Índice", COLORS.blue, refreshIndex)
-	createPanel(gui, "rebirth", "🔄 Renascimento", COLORS.purple, refreshRebirth)
+	createPanel(gui, "index", "📖 Índice", COLORS.blue, refreshIndex, Vector2.new(860, 620))
+	createPanel(gui, "rebirth", "🔄 Renascimento", COLORS.red, refreshRebirth, Vector2.new(700, 560))
+	createPanel(gui, "base", "🐾 Minha base", COLORS.orange, refreshBase, Vector2.new(700, 560))
 	createPanel(gui, "gift", "🎁 Presente", COLORS.red, refreshGift)
 	createPanel(gui, "daily", "📅 Recompensa diária", COLORS.orange, refreshDaily)
 
@@ -1021,6 +1358,11 @@ function HUD.start()
 			end
 		end)
 	end
+	player:GetAttributeChangedSignal("Storage"):Connect(function()
+		if openName == "base" then
+			panels.base.Refresh()
+		end
+	end)
 	player:GetAttributeChangedSignal("Discovered"):Connect(function()
 		if openName == "index" then
 			panels.index.Refresh()

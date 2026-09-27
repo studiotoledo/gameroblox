@@ -169,6 +169,19 @@ local ACTIONS = {
 	sellall = function(player)
 		S.KaijuService.sellAll(player)
 	end,
+	remove = function(player, uid)
+		if type(uid) == "number" then
+			S.KaijuService.storeFromSlot(player, uid)
+		end
+	end,
+	place = function(player, index)
+		if type(index) == "number" then
+			S.KaijuService.placeFromInventory(player, index)
+		end
+	end,
+	equipbest = function(player)
+		S.KaijuService.equipBest(player)
+	end,
 	rebirth = rebirth,
 	daily = claimDaily,
 	gift = claimGift,
@@ -181,11 +194,8 @@ function RewardsService.setup(player: Player)
 	end
 	player:SetAttribute("SlowMode", false)
 	player:SetAttribute("GiftReadyAt", os.time() + Config.GiftInterval)
-	local ids = {}
-	for id in data.Discovered do
-		table.insert(ids, id)
-	end
-	player:SetAttribute("Discovered", table.concat(ids, ","))
+	S.KaijuService.publishDiscovered(player)
+	S.KaijuService.refreshInventoryTools(player)
 	refreshDaily(player)
 	for _, other in Players:GetPlayers() do
 		task.spawn(RewardsService.refreshMultiplier, other)

@@ -26,7 +26,7 @@ Config.OfflineCapSeconds = 2 * 60 * 60
 Config.OfflineIncomeRate = 0.5
 
 -- Inventário: kaijus trazidos das zonas ficam seguros aqui ao cruzar para a área das bases
-Config.InventorySize = 10
+Config.InventorySize = 50 -- depósito: recém-capturados + guardados pelo painel "Minha base"
 
 -- Roubo
 Config.DropReturnTime = 15 -- segundos até um kaiju derrubado voltar pra casa

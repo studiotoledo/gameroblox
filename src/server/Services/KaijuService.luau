@@ -1,6 +1,7 @@
 -- Coração do jogo: cada kaiju é uma "entidade" controlada pelo servidor.
 -- Estados: Nest (no ninho), Slot (numa base), Carried (na cabeça de alguém), Dropped (no chão).
 
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -308,19 +309,39 @@ function KaijuService.removeEntity(e)
 end
 
 -- Índice: registra que o jogador já teve esse kaiju
-function KaijuService.markDiscovered(player: Player, id: string)
+function KaijuService.markDiscovered(player: Player, id: string, mutation: string?)
 	local data = S.DataService.get(player)
 	if not data then
 		return
 	end
-	if not data.Discovered[id] then
-		data.Discovered[id] = true
+	data.Discovered[id] = true
+	if mutation and mutation ~= "Normal" then
+		data.DiscoveredMutations[mutation] = data.DiscoveredMutations[mutation] or {}
+		data.DiscoveredMutations[mutation][id] = true
+	end
+	KaijuService.publishDiscovered(player)
+end
+
+-- Envia ao cliente o que já foi descoberto: "id,id" e "Mutação:id,id;Mutação:id"
+function KaijuService.publishDiscovered(player: Player)
+	local data = S.DataService.get(player)
+	if not data then
+		return
 	end
 	local ids = {}
 	for known in data.Discovered do
 		table.insert(ids, known)
 	end
 	player:SetAttribute("Discovered", table.concat(ids, ","))
+	local groups = {}
+	for mutation, set in data.DiscoveredMutations do
+		local list = {}
+		for known in set do
+			table.insert(list, known)
+		end
+		table.insert(groups, mutation .. ":" .. table.concat(list, ","))
+	end
+	player:SetAttribute("DiscoveredMutations", table.concat(groups, ";"))
 end
 
 function KaijuService.placeInSlot(e, plot, index: number)
@@ -334,7 +355,7 @@ function KaijuService.placeInSlot(e, plot, index: number)
 	e.HomeUserId, e.HomePlot, e.HomeSlot, e.OriginZone, e.Nest = nil, nil, nil, nil, nil
 	e.Model:PivotTo(slot.CFrame)
 	e.Model.Parent = folder
-	KaijuService.markDiscovered(plot.Owner, e.Id)
+	KaijuService.markDiscovered(plot.Owner, e.Id, e.Mutation)
 	refreshPrompts(e)
 	refreshBillboard(e)
 	refreshBillboardOffset(e)
@@ -792,6 +813,13 @@ local function warnThrottled(player: Player, text: string)
 	end
 end
 
+local function recordIncome(record): number
+	local def = KaijuData.ById[record.Id]
+	local mutation = Config.MutationsByName[record.Mutation or "Normal"] or Config.MutationsByName.Normal
+	return def.Income * Config.Stages[record.Stage or 1].IncomeMult * mutation.Mult
+end
+
+-- Atualiza a hotbar (só kaijus recém-capturados) e a lista do depósito usada no painel "Minha base".
 function KaijuService.refreshInventoryTools(player: Player)
 	for _, container in { player:FindFirstChildOfClass("Backpack"), player.Character } do
 		if container then
@@ -802,13 +830,32 @@ function KaijuService.refreshInventoryTools(player: Player)
 			end
 		end
 	end
-	local backpack = player:FindFirstChildOfClass("Backpack")
 	local inventory = inventoryOf(player)
-	if not backpack or not inventory then
+	if not inventory then
+		return
+	end
+	local listed = {}
+	for i, record in inventory do
+		if KaijuData.ById[record.Id] then
+			local def = KaijuData.ById[record.Id]
+			table.insert(listed, {
+				Index = i,
+				Id = record.Id,
+				Name = displayName(record),
+				Rarity = def.Rarity,
+				Stage = Config.Stages[record.Stage or 1].Name,
+				Income = recordIncome(record),
+			})
+		end
+	end
+	player:SetAttribute("Storage", HttpService:JSONEncode(listed))
+
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	if not backpack then
 		return
 	end
 	for _, record in inventory do
-		if KaijuData.ById[record.Id] then
+		if record.New and KaijuData.ById[record.Id] then
 			local tool = Instance.new("Tool")
 			tool.Name = "🛡️ " .. displayName(record)
 			tool.ToolTip = Config.Stages[record.Stage or 1].Name .. " • guardado, entre na sua base"
@@ -826,11 +873,14 @@ local function secure(player: Player, e)
 		return
 	end
 	if #inventory >= Config.InventorySize then
-		warnThrottled(player, "Inventário cheio! Leve o kaiju até a sua base.")
+		warnThrottled(player, "Depósito cheio! Venda ou coloque kaijus na base.")
 		return
 	end
 	local name = displayName(e)
-	table.insert(inventory, { Id = e.Id, Stage = e.Stage, Growth = math.floor(e.Growth), Mutation = e.Mutation })
+	table.insert(
+		inventory,
+		{ Id = e.Id, Stage = e.Stage, Growth = math.floor(e.Growth), Mutation = e.Mutation, New = true }
+	)
 	detach(e)
 	KaijuService.removeEntity(e)
 	local data = S.DataService.get(player)
@@ -845,35 +895,147 @@ local function secure(player: Player, e)
 	)
 end
 
+-- Coloca na base os kaijus recém-capturados (os guardados de propósito ficam no depósito).
 local function depositInventory(player: Player, plot)
 	local inventory = inventoryOf(player)
-	if not inventory or #inventory == 0 then
+	if not inventory then
 		return
 	end
 	local placed = 0
-	while #inventory > 0 do
+	local i = 1
+	while i <= #inventory do
+		local record = inventory[i]
+		if not record.New then
+			i += 1
+			continue
+		end
 		local index = S.PlotService.findFreeSlot(plot)
 		if not index then
-			warnThrottled(player, "Sua base está cheia! Venda um kaiju ou desbloqueie espaços.")
-			break
+			record.New = nil
+			warnThrottled(player, 'Base cheia! O kaiju foi para o depósito (abra "Minha base").')
+			i += 1
+			continue
 		end
-		local record = table.remove(inventory, 1)
+		table.remove(inventory, i)
 		if KaijuData.ById[record.Id] then
 			local e = createEntity(record.Id, record.Stage or 1, record.Mutation, record.Growth)
 			KaijuService.placeInSlot(e, plot, index)
 			placed += 1
 		end
 	end
+	KaijuService.refreshInventoryTools(player)
 	if placed > 0 then
-		KaijuService.refreshInventoryTools(player)
 		S.Notify.send(player, string.format("%d kaiju(s) colocado(s) na sua base!", placed), "success")
 	end
+end
+
+---------------------------------------------------------------------------
+-- Painel "Minha base": remover, colocar e equipar os melhores
+---------------------------------------------------------------------------
+
+local function toRecord(e)
+	return { Id = e.Id, Stage = e.Stage, Growth = math.floor(e.Growth), Mutation = e.Mutation }
+end
+
+function KaijuService.storeFromSlot(player: Player, uid: number)
+	local e = entities[uid]
+	local inventory = inventoryOf(player)
+	if not e or not inventory or e.State ~= "Slot" or e.OwnerUserId ~= player.UserId then
+		return
+	end
+	if #inventory >= Config.InventorySize then
+		S.Notify.send(player, "Depósito cheio!", "warn")
+		return
+	end
+	table.insert(inventory, toRecord(e))
+	KaijuService.removeEntity(e)
+	KaijuService.refreshInventoryTools(player)
+end
+
+function KaijuService.placeFromInventory(player: Player, index: number)
+	local inventory = inventoryOf(player)
+	local plot = S.PlotService.getPlot(player)
+	local record = inventory and inventory[index]
+	if not record or not plot or not KaijuData.ById[record.Id] then
+		return
+	end
+	local slot = S.PlotService.findFreeSlot(plot)
+	if not slot then
+		S.Notify.send(player, "Sua base está cheia! Remova um kaiju primeiro.", "warn")
+		return
+	end
+	table.remove(inventory, index)
+	local e = createEntity(record.Id, record.Stage or 1, record.Mutation, record.Growth)
+	KaijuService.placeInSlot(e, plot, slot)
+	KaijuService.refreshInventoryTools(player)
+end
+
+-- Deixa nos pedestais os kaijus que mais rendem e guarda o resto no depósito.
+function KaijuService.equipBest(player: Player)
+	local inventory = inventoryOf(player)
+	local plot = S.PlotService.getPlot(player)
+	local data = S.DataService.get(player)
+	if not inventory or not plot or not data then
+		return
+	end
+	local all = {}
+	for _, e in entities do
+		if e.State == "Slot" and e.OwnerUserId == player.UserId then
+			table.insert(all, { Income = KaijuService.income(e), Entity = e })
+		end
+	end
+	for i, record in inventory do
+		if KaijuData.ById[record.Id] then
+			table.insert(all, { Income = recordIncome(record), Record = record, Index = i })
+		end
+	end
+	table.sort(all, function(a, b)
+		return a.Income > b.Income
+	end)
+	local capacity = math.min(data.SlotsUnlocked, #plot.Slots)
+	-- 1) guarda quem ficou fora do top
+	for rank = capacity + 1, #all do
+		local item = all[rank]
+		if item.Entity then
+			table.insert(inventory, toRecord(item.Entity))
+			KaijuService.removeEntity(item.Entity)
+		end
+	end
+	-- 2) coloca quem entrou no top (removendo do depósito do fim para o começo)
+	local toPlace = {}
+	for rank = 1, math.min(capacity, #all) do
+		if all[rank].Record then
+			table.insert(toPlace, all[rank])
+		end
+	end
+	table.sort(toPlace, function(a, b)
+		return a.Index > b.Index
+	end)
+	for _, item in toPlace do
+		local slot = S.PlotService.findFreeSlot(plot)
+		if not slot then
+			break
+		end
+		table.remove(inventory, item.Index)
+		local r = item.Record
+		local e = createEntity(r.Id, r.Stage or 1, r.Mutation, r.Growth)
+		KaijuService.placeInSlot(e, plot, slot)
+	end
+	KaijuService.refreshInventoryTools(player)
+	S.Notify.send(player, "Os melhores kaijus foram colocados na base!", "success")
 end
 
 local function inventoryTick()
 	for _, player in Players:GetPlayers() do
 		local inventory = inventoryOf(player)
-		if inventory and #inventory > 0 then
+		local hasNew = false
+		for _, record in inventory or {} do
+			if record.New then
+				hasNew = true
+				break
+			end
+		end
+		if hasNew then
 			local plot = S.PlotService.getPlot(player)
 			local char = player.Character
 			local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
