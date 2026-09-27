@@ -146,8 +146,18 @@ end
 -- Dono
 ---------------------------------------------------------------------------
 
+-- As bases do centro ficam em frente ao caminho das zonas, então são entregues primeiro.
+local function plotsByPreference()
+	local ordered = table.clone(plots)
+	local middle = (#plots + 1) / 2
+	table.sort(ordered, function(a, b)
+		return math.abs(a.Index - middle) < math.abs(b.Index - middle)
+	end)
+	return ordered
+end
+
 function PlotService.assign(player: Player)
-	for _, plot in plots do
+	for _, plot in plotsByPreference() do
 		if not plot.Owner then
 			plot.Owner = player
 			plot.Pending = 0

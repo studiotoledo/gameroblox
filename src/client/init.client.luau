@@ -3,3 +3,4 @@
 require(script.HUD).start()
 require(script.PromptFilter).start()
 require(script.Effects).start()
+require(script.BaseMarker).start()

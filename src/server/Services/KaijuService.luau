@@ -231,6 +231,36 @@ local function detach(e)
 	end
 end
 
+-- Item na hotbar mostrando o kaiju que o jogador está carregando.
+local CARRY_TOOL_ATTRIBUTE = "CarryTool"
+
+local function removeCarryTool(player: Player)
+	for _, container in { player:FindFirstChildOfClass("Backpack"), player.Character } do
+		if container then
+			for _, child in container:GetChildren() do
+				if child:IsA("Tool") and child:GetAttribute(CARRY_TOOL_ATTRIBUTE) then
+					child:Destroy()
+				end
+			end
+		end
+	end
+end
+
+local function giveCarryTool(player: Player, e)
+	removeCarryTool(player)
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	if not backpack then
+		return
+	end
+	local tool = Instance.new("Tool")
+	tool.Name = "🦖 " .. displayName(e)
+	tool.ToolTip = Config.Stages[e.Stage].Name .. " • leve para a sua base"
+	tool.RequiresHandle = false
+	tool.CanBeDropped = false
+	tool:SetAttribute(CARRY_TOOL_ATTRIBUTE, true)
+	tool.Parent = backpack
+end
+
 local function clearCarrier(e)
 	local player = e.Carrier
 	if player then
@@ -238,6 +268,7 @@ local function clearCarrier(e)
 		if carrying[player] == e then
 			carrying[player] = nil
 			player:SetAttribute("Carrying", "")
+			removeCarryTool(player)
 			S.CharacterService.refreshSpeed(player)
 		end
 	end
@@ -419,6 +450,7 @@ local function startCarry(player: Player, e)
 	e.Carrier = player
 	carrying[player] = e
 	player:SetAttribute("Carrying", displayName(e) .. " (" .. Config.Stages[e.Stage].Name .. ")")
+	giveCarryTool(player, e)
 	S.CharacterService.refreshSpeed(player)
 	refreshPrompts(e)
 	refreshBillboard(e)
@@ -678,7 +710,22 @@ local function carrierTick()
 		else
 			local plot = S.PlotService.getPlot(player)
 			if plot and S.PlotService.isInside(plot, hrp.Position) then
-				deposit(player, e, plot)
+				local ok, err = xpcall(deposit, debug.traceback, player, e, plot)
+				if not ok then
+					warn("[KaijuService] Falha ao guardar kaiju de " .. player.Name .. ": " .. tostring(err))
+				end
+			else
+				-- entrou na base errada: avisa e aponta a certa
+				for _, other in S.PlotService.getPlots() do
+					if other ~= plot and S.PlotService.isInside(other, hrp.Position) then
+						local now = os.clock()
+						if (lastFullWarning[player] or 0) + 4 < now then
+							lastFullWarning[player] = now
+							S.Notify.send(player, "Essa não é a sua base! Siga a seta até a SUA BASE.", "warn")
+						end
+						break
+					end
+				end
 			end
 		end
 	end

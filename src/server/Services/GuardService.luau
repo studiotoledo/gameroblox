@@ -1,5 +1,6 @@
 -- Uma "Mãe Kaiju" gigante patrulha cada zona e persegue quem rouba filhotes dela.
 -- Quem for mais rápido que o guardião escapa; quem for pego perde o filhote.
+-- Todos os guardiões da zona caçam quem estiver carregando um filhote dela, em qualquer ponto da zona.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15,7 +16,7 @@ local S
 local guards = {}
 local knockback = Remotes.get("Knockback")
 
-local function buildGuard(zone)
+local function buildGuard(zone, number: number)
 	local def = KaijuData.Guards[zone.Index] or KaijuData.Guards[1]
 	local model = KaijuModel.build(def, "Normal")
 	model.Name = def.Name
@@ -37,7 +38,9 @@ local function buildGuard(zone)
 	label.Parent = bb
 	bb.Parent = model.PrimaryPart
 
-	local home = zone.Nests[1] and zone.Nests[1].Position or Vector3.new(0, 0.2, (zone.MinZ + zone.MaxZ) / 2)
+	-- cada guardião começa perto de um ninho diferente
+	local nest = zone.Nests[((number - 1) * 3) % math.max(1, #zone.Nests) + 1]
+	local home = if nest then nest.Position else Vector3.new(0, 0.2, (zone.MinZ + zone.MaxZ) / 2)
 	local guard = {
 		Zone = zone,
 		Model = model,
@@ -53,16 +56,17 @@ local function buildGuard(zone)
 end
 
 local function findTarget(guard)
-	local best, bestDist = nil, Config.GuardAggroRange
+	local best, bestDist = nil, math.huge
 	for player, e in S.KaijuService.getCarriers() do
 		if e.OriginZone == guard.Zone.Index then
 			local char = player.Character
 			local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if hrp then
 				local p = hrp.Position
-				local inZone = p.Z >= guard.Zone.MinZ - 15 and p.Z <= guard.Zone.MaxZ + 15
+				local inZone = p.Z >= guard.Zone.MinZ and p.Z <= guard.Zone.MaxZ
 				local dist = (Vector3.new(p.X, 0, p.Z) - Vector3.new(guard.Position.X, 0, guard.Position.Z)).Magnitude
-				if inZone and dist < bestDist then
+				-- dentro da zona persegue sempre; fora dela, só se estiver perto
+				if (inZone or dist < Config.GuardAggroRange) and dist < bestDist then
 					best, bestDist = player, dist
 				end
 			end
@@ -90,7 +94,7 @@ local function step(guard, dt: number)
 			guard.Goal = pickWanderGoal(guard)
 		end
 		goal = guard.Goal
-		speed = guard.Speed * 0.35
+		speed = guard.Speed * 0.45
 	end
 
 	local flat = Vector3.new(goal.X - guard.Position.X, 0, goal.Z - guard.Position.Z)
@@ -125,7 +129,9 @@ end
 
 function GuardService.Start()
 	for _, zone in S.Map.Zones do
-		table.insert(guards, buildGuard(zone))
+		for number = 1, zone.Config.Guards or 1 do
+			table.insert(guards, buildGuard(zone, number))
+		end
 	end
 	RunService.Heartbeat:Connect(function(dt)
 		if #Players:GetPlayers() == 0 then

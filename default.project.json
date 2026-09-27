@@ -24,7 +24,16 @@
         "ClockTime": 14.5,
         "Brightness": 2.5,
         "GlobalShadows": true,
-        "OutdoorAmbient": [0.55, 0.55, 0.6]
+        "OutdoorAmbient": [
+          0.55,
+          0.55,
+          0.6
+        ]
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false
       }
     }
   }

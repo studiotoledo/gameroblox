@@ -116,63 +116,76 @@ for _, m in Config.Mutations do
 end
 
 -- Zonas, da mais perto da base para a mais longe. Z = distância a partir das bases.
+-- RequiredSpeed: velocidade (16 + treino) mínima para passar pelo portal da zona.
+-- GuardSpeed fica acima do mínimo: só entrar não basta, é preciso treinar para fugir.
+-- Weights: chance de cada raridade nascer num ninho da zona (cada zona tem o "seu" nível).
 Config.Zones = {
 	{
 		Name = "Praia Tranquila",
 		ZStart = 110,
-		ZEnd = 260,
+		ZEnd = 400,
 		Color = Color3.fromRGB(235, 215, 160),
 		Material = Enum.Material.Sand,
-		Nests = 7,
-		GuardSpeed = 14,
-		Weights = { Comum = 80, Incomum = 18, Raro = 2 },
+		Nests = 8,
+		RequiredSpeed = 0,
+		GuardSpeed = 17,
+		Guards = 1,
+		Weights = { Comum = 90, Incomum = 10 },
 	},
 	{
 		Name = "Floresta Selvagem",
-		ZStart = 270,
-		ZEnd = 440,
+		ZStart = 420,
+		ZEnd = 800,
 		Color = Color3.fromRGB(90, 160, 70),
 		Material = Enum.Material.Grass,
-		Nests = 7,
-		GuardSpeed = 24,
-		Weights = { Comum = 45, Incomum = 38, Raro = 14, ["Épico"] = 3 },
+		Nests = 8,
+		RequiredSpeed = 30,
+		GuardSpeed = 36,
+		Guards = 2,
+		Weights = { Comum = 20, Incomum = 70, Raro = 10 },
 	},
 	{
 		Name = "Vulcão Furioso",
-		ZStart = 450,
-		ZEnd = 640,
+		ZStart = 820,
+		ZEnd = 1280,
 		Color = Color3.fromRGB(60, 50, 50),
 		Material = Enum.Material.Basalt,
-		Nests = 6,
-		GuardSpeed = 34,
-		Weights = { Incomum = 35, Raro = 40, ["Épico"] = 20, ["Lendário"] = 5 },
+		Nests = 7,
+		RequiredSpeed = 55,
+		GuardSpeed = 64,
+		Guards = 2,
+		Weights = { Incomum = 15, Raro = 70, ["Épico"] = 15 },
 	},
 	{
 		Name = "Geleira Eterna",
-		ZStart = 650,
-		ZEnd = 860,
+		ZStart = 1300,
+		ZEnd = 1850,
 		Color = Color3.fromRGB(200, 230, 245),
 		Material = Enum.Material.Glacier,
-		Nests = 6,
-		GuardSpeed = 46,
-		Weights = { Raro = 40, ["Épico"] = 40, ["Lendário"] = 16, ["Mítico"] = 4 },
+		Nests = 7,
+		RequiredSpeed = 85,
+		GuardSpeed = 98,
+		Guards = 3,
+		Weights = { Raro = 10, ["Épico"] = 65, ["Lendário"] = 22, ["Mítico"] = 3 },
 	},
 	{
 		Name = "Abismo Cósmico",
-		ZStart = 870,
-		ZEnd = 1100,
+		ZStart = 1870,
+		ZEnd = 2500,
 		Color = Color3.fromRGB(45, 25, 70),
 		Material = Enum.Material.Slate,
-		Nests = 5,
-		GuardSpeed = 60,
-		Weights = { ["Épico"] = 45, ["Lendário"] = 38, ["Mítico"] = 14, Secreto = 3 },
+		Nests = 6,
+		RequiredSpeed = 125,
+		GuardSpeed = 142,
+		Guards = 3,
+		Weights = { ["Lendário"] = 62, ["Mítico"] = 32, Secreto = 6 },
 	},
 }
 
 Config.MapHalfWidth = 312
-Config.NestRespawn = { Min = 6, Max = 14 }
-Config.NestLifetime = 90
-Config.GuardAggroRange = 90
+Config.NestRespawn = { Min = 25, Max = 45 } -- segundos até o ninho ganhar outro filhote
+Config.NestLifetime = 120 -- filhote não roubado some depois disso
+Config.GuardAggroRange = 120
 Config.GuardScale = 3
 
 return Config

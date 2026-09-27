@@ -104,6 +104,14 @@ function HUD.start()
 		Text = "⚡ 16",
 	})
 
+	local nextLabel = text(gui, {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0, 110, 0.5, 0),
+		Size = UDim2.fromOffset(210, 20),
+		TextColor3 = Color3.fromRGB(255, 225, 140),
+		Text = "",
+	})
+
 	-- carregando
 	local carry = pill(gui, "Carry", Color3.fromRGB(255, 120, 40), UDim2.new(0.5, 0, 0, 94), UDim2.fromOffset(460, 44))
 	carry.Visible = false
@@ -222,8 +230,18 @@ function HUD.start()
 		incomeLabel.Text = "+" .. Format.money(player:GetAttribute("Income") or 0) .. "/s"
 	end
 	local function updateSpeed()
-		speedLabel.Text = "⚡ Velocidade "
-			.. math.floor(Config.BaseWalkSpeed + (player:GetAttribute("SpeedStat") or 0))
+		local speed = math.floor(Config.BaseWalkSpeed + (player:GetAttribute("SpeedStat") or 0))
+		local nextZone
+		for _, zone in Config.Zones do
+			if zone.RequiredSpeed > speed then
+				nextZone = zone
+				break
+			end
+		end
+		speedLabel.Text = "⚡ Velocidade " .. speed
+		nextLabel.Text = if nextZone
+			then string.format("Próxima zona: %s (%d)", nextZone.Name, nextZone.RequiredSpeed)
+			else "Todas as zonas liberadas!"
 	end
 	local function updateCarry()
 		local carrying = player:GetAttribute("Carrying") or ""

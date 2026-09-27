@@ -543,10 +543,34 @@ local function buildZone(index: number, zone, parent: Instance)
 		label.TextScaled = true
 		label.TextColor3 = Color3.new(1, 1, 1)
 		label.TextStrokeTransparency = 0
-		label.Text =
-			string.format("ZONA %d • %s\nGuardião: velocidade %d", index, string.upper(zone.Name), zone.GuardSpeed)
+		local requirement = if zone.RequiredSpeed > 0
+			then string.format("⚡ Precisa de velocidade %d", zone.RequiredSpeed)
+			else "Entrada livre"
+		label.Text = string.format(
+			"ZONA %d • %s\n%s • Guardião %d",
+			index,
+			string.upper(zone.Name),
+			requirement,
+			zone.GuardSpeed
+		)
 		label.Parent = gui
 		gui.Parent = beam
+	end
+
+	-- cortina de energia: só passa quem tem a velocidade mínima (ZoneService barra os outros)
+	if zone.RequiredSpeed > 0 then
+		part({
+			Name = "SpeedGate",
+			Size = Vector3.new(half * 2, 30, 1),
+			CFrame = CFrame.new(0, 15, zone.ZStart),
+			Color = Color3.fromRGB(80, 200, 255),
+			Material = Enum.Material.ForceField,
+			Transparency = 0.2,
+			CanCollide = false,
+			CanQuery = false,
+			CastShadow = false,
+			Parent = folder,
+		})
 	end
 
 	-- ninhos, espalhados com uma distância mínima entre eles
@@ -571,7 +595,7 @@ local function buildZone(index: number, zone, parent: Instance)
 
 	-- decoração longe dos ninhos e do caminho central
 	local decorate = ZONE_DECOR[index] or Decorators.rock
-	for _ = 1, 26 do
+	for _ = 1, math.floor(26 * depth / 150) do
 		local pos =
 			Vector3.new(rng:NextNumber(-half + 5, half - 5), 0.2, rng:NextNumber(zone.ZStart + 6, zone.ZEnd - 6))
 		local clear = math.abs(pos.X) > 14
