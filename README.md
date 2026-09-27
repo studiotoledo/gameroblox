@@ -26,9 +26,9 @@ O conceito completo (mercado, monetização e plano) está em [`docs/IDEIA_DO_JO
 
 - Mapa gerado por código: 8 bases, 5 zonas (Praia, Floresta, Vulcão, Geleira, Abismo) com ninhos e decoração.
 - 15 kaijus em 7 raridades e 5 mutações (Dourado, Diamante, Neon, Radioativo), modelos 3D feitos por peças.
-- Roubar filhote do ninho (tecla **E**), levar na cabeça e depositar entrando na sua base.
+- Roubar filhote do ninho (tecla **E**) e levar na cabeça. Ao cruzar da Praia para a área das bases, ele fica seguro no inventário (hotbar) e vai sozinho para um pedestal quando você entra na sua base.
 - Zonas longas com portal de velocidade: só entra quem tem a velocidade mínima (40, 80, 140 e 220).
-- Guardiões ("Mães Kaiju"), de 1 a 3 por zona e mais rápidos que o mínimo, caçam quem rouba. Quem for pego perde o filhote.
+- Guardiões ("Mães Kaiju"), de 1 a 3 por zona e mais rápidos que o mínimo, caçam quem rouba por todas as zonas até a linha das bases. Quem for pego perde o filhote.
 - Placa "SUA BASE" visível de longe, linha guia até a base enquanto carrega, e o kaiju carregado aparece na hotbar.
 - Crescimento em tempo real: Filhote → Jovem → Adulto → Titã. O modelo cresce e a renda sobe.
 - Renda passiva acumulada no coletor da base (pise para coletar).

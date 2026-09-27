@@ -1,6 +1,7 @@
 -- Uma "Mãe Kaiju" gigante patrulha cada zona e persegue quem rouba filhotes dela.
 -- Quem for mais rápido que o guardião escapa; quem for pego perde o filhote.
--- Todos os guardiões da zona caçam quem estiver carregando um filhote dela, em qualquer ponto da zona.
+-- Todos os guardiões da zona caçam quem estiver carregando um filhote dela, atravessando as outras
+-- zonas se preciso, e só desistem quando o jogador cruza a linha para a área das bases.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -55,6 +56,9 @@ local function buildGuard(zone, number: number)
 	return guard
 end
 
+-- linha entre a Praia e a área das bases: daqui para trás os guardiões não entram
+local SAFE_LINE_Z = Config.Zones[1].ZStart
+
 local function findTarget(guard)
 	local best, bestDist = nil, math.huge
 	for player, e in S.KaijuService.getCarriers() do
@@ -63,10 +67,9 @@ local function findTarget(guard)
 			local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if hrp then
 				local p = hrp.Position
-				local inZone = p.Z >= guard.Zone.MinZ and p.Z <= guard.Zone.MaxZ
 				local dist = (Vector3.new(p.X, 0, p.Z) - Vector3.new(guard.Position.X, 0, guard.Position.Z)).Magnitude
-				-- dentro da zona persegue sempre; fora dela, só se estiver perto
-				if (inZone or dist < Config.GuardAggroRange) and dist < bestDist then
+				-- persegue por todas as zonas; só desiste quando o jogador cruza para a área das bases
+				if p.Z >= SAFE_LINE_Z and dist < bestDist then
 					best, bestDist = player, dist
 				end
 			end
@@ -105,7 +108,7 @@ local function step(guard, dt: number)
 	pos = Vector3.new(
 		math.clamp(pos.X, zone.MinX + 10, zone.MaxX - 10),
 		0.2,
-		math.clamp(pos.Z, zone.MinZ + 5, zone.MaxZ - 5)
+		math.clamp(pos.Z, SAFE_LINE_Z + 2, zone.MaxZ - 5) -- sem alvo, volta andando para a zona dele
 	)
 	guard.Position = pos
 

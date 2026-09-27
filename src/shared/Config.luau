@@ -25,6 +25,9 @@ Config.SellSeconds = 30 -- vender = X segundos da renda do kaiju
 Config.OfflineCapSeconds = 2 * 60 * 60
 Config.OfflineIncomeRate = 0.5
 
+-- Inventário: kaijus trazidos das zonas ficam seguros aqui ao cruzar para a área das bases
+Config.InventorySize = 10
+
 -- Roubo
 Config.DropReturnTime = 15 -- segundos até um kaiju derrubado voltar pra casa
 Config.SlapCooldown = 0.9
@@ -187,7 +190,6 @@ Config.Zones = {
 Config.MapHalfWidth = 312
 Config.NestRespawn = { Min = 25, Max = 45 } -- segundos até o ninho ganhar outro filhote
 Config.NestLifetime = 120 -- filhote não roubado some depois disso
-Config.GuardAggroRange = 120
 Config.GuardScale = 3
 
 return Config

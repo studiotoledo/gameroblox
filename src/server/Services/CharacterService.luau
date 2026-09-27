@@ -35,6 +35,7 @@ local function onCharacter(player: Player, char: Model)
 	end
 	CharacterService.refreshSpeed(player)
 	S.SlapService.giveTool(player)
+	S.KaijuService.refreshInventoryTools(player)
 	hum.Died:Connect(function()
 		S.PlotService.stopTraining(player)
 		S.KaijuService.drop(player, "died")

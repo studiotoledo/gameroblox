@@ -22,6 +22,7 @@ local function defaultData()
 		TreadmillLevel = 0,
 		SlotsUnlocked = Config.StartingSlots,
 		Kaijus = {},
+		Inventory = {}, -- kaijus trazidos das zonas que ainda não foram para um pedestal
 		LastOnline = 0,
 		Stats = { Captured = 0, Steals = 0, TimesRobbed = 0 },
 	}

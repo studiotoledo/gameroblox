@@ -18,6 +18,7 @@ local folder: Folder
 local entities: { [number]: any } = {}
 local carrying: { [Player]: any } = {}
 local lastFullWarning: { [Player]: number } = {}
+local lastInventoryWarning: { [Player]: number } = {}
 local nextUid = 0
 
 ---------------------------------------------------------------------------
@@ -650,6 +651,7 @@ function KaijuService.clearPlayer(player: Player)
 		end
 	end
 	lastFullWarning[player] = nil
+	lastInventoryWarning[player] = nil
 end
 
 ---------------------------------------------------------------------------
@@ -715,6 +717,124 @@ local function incomeTick()
 	end
 end
 
+---------------------------------------------------------------------------
+-- Inventário: ao cruzar da Praia para a área das bases, o filhote sai da cabeça
+-- e fica guardado (não pode mais ser derrubado nem roubado). Ao entrar na base,
+-- vai sozinho para um pedestal livre.
+---------------------------------------------------------------------------
+
+local INVENTORY_TOOL_ATTRIBUTE = "InventoryTool"
+
+local function inventoryOf(player: Player)
+	local data = S.DataService.get(player)
+	return data and data.Inventory
+end
+
+local function warnThrottled(player: Player, text: string)
+	local now = os.clock()
+	if (lastInventoryWarning[player] or 0) + 4 < now then
+		lastInventoryWarning[player] = now
+		S.Notify.send(player, text, "warn")
+	end
+end
+
+function KaijuService.refreshInventoryTools(player: Player)
+	for _, container in { player:FindFirstChildOfClass("Backpack"), player.Character } do
+		if container then
+			for _, child in container:GetChildren() do
+				if child:IsA("Tool") and child:GetAttribute(INVENTORY_TOOL_ATTRIBUTE) then
+					child:Destroy()
+				end
+			end
+		end
+	end
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	local inventory = inventoryOf(player)
+	if not backpack or not inventory then
+		return
+	end
+	for _, record in inventory do
+		if KaijuData.ById[record.Id] then
+			local tool = Instance.new("Tool")
+			tool.Name = "🛡️ " .. displayName(record)
+			tool.ToolTip = Config.Stages[record.Stage or 1].Name .. " • guardado, entre na sua base"
+			tool.RequiresHandle = false
+			tool.CanBeDropped = false
+			tool:SetAttribute(INVENTORY_TOOL_ATTRIBUTE, true)
+			tool.Parent = backpack
+		end
+	end
+end
+
+local function secure(player: Player, e)
+	local inventory = inventoryOf(player)
+	if not inventory then
+		return
+	end
+	if #inventory >= Config.InventorySize then
+		warnThrottled(player, "Inventário cheio! Leve o kaiju até a sua base.")
+		return
+	end
+	local name = displayName(e)
+	table.insert(inventory, { Id = e.Id, Stage = e.Stage, Growth = math.floor(e.Growth), Mutation = e.Mutation })
+	detach(e)
+	KaijuService.removeEntity(e)
+	local data = S.DataService.get(player)
+	if data then
+		data.Stats.Captured += 1
+	end
+	KaijuService.refreshInventoryTools(player)
+	S.Notify.send(
+		player,
+		"🛡️ " .. name .. " está seguro no seu inventário! Entre na sua base para colocar.",
+		"success"
+	)
+end
+
+local function depositInventory(player: Player, plot)
+	local inventory = inventoryOf(player)
+	if not inventory or #inventory == 0 then
+		return
+	end
+	local placed = 0
+	while #inventory > 0 do
+		local index = S.PlotService.findFreeSlot(plot)
+		if not index then
+			warnThrottled(player, "Sua base está cheia! Venda um kaiju ou desbloqueie espaços.")
+			break
+		end
+		local record = table.remove(inventory, 1)
+		if KaijuData.ById[record.Id] then
+			local e = createEntity(record.Id, record.Stage or 1, record.Mutation, record.Growth)
+			KaijuService.placeInSlot(e, plot, index)
+			placed += 1
+		end
+	end
+	if placed > 0 then
+		KaijuService.refreshInventoryTools(player)
+		S.Notify.send(player, string.format("%d kaiju(s) colocado(s) na sua base!", placed), "success")
+	end
+end
+
+local function inventoryTick()
+	for _, player in Players:GetPlayers() do
+		local inventory = inventoryOf(player)
+		if inventory and #inventory > 0 then
+			local plot = S.PlotService.getPlot(player)
+			local char = player.Character
+			local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if plot and hrp and S.PlotService.isInside(plot, hrp.Position) then
+				local ok, err = xpcall(depositInventory, debug.traceback, player, plot)
+				if not ok then
+					warn("[KaijuService] Falha ao colocar kaiju do inventário: " .. tostring(err))
+				end
+			end
+		end
+	end
+end
+
+local SAFE_LINE_Z = Config.Zones[1].ZStart
+
 local function carrierTick()
 	for player, e in carrying do
 		local char = player.Character
@@ -722,6 +842,9 @@ local function carrierTick()
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
 		if not hrp or not hum or hum.Health <= 0 or not e.Weld or e.Weld.Part0 ~= hrp then
 			KaijuService.drop(player, "lost")
+		elseif e.OriginZone and hrp.Position.Z < SAFE_LINE_Z then
+			-- filhote de ninho cruzou a linha das zonas: fica seguro no inventário
+			secure(player, e)
 		else
 			local plot = S.PlotService.getPlot(player)
 			if plot and S.PlotService.isInside(plot, hrp.Position) then
@@ -767,6 +890,7 @@ function KaijuService.Start()
 		if acc >= 0.1 then
 			acc = 0
 			carrierTick()
+			inventoryTick()
 		end
 	end)
 end
