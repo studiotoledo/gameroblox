@@ -23,6 +23,10 @@ local function defaultData()
 		SlotsUnlocked = Config.StartingSlots,
 		Kaijus = {},
 		Inventory = {}, -- kaijus trazidos das zonas que ainda não foram para um pedestal
+		Discovered = {}, -- [id] = true, para o Índice
+		Rebirths = 0,
+		LastDaily = 0, -- dia (os.time() // 86400) do último resgate
+		DailyStreak = 0,
 		LastOnline = 0,
 		Stats = { Captured = 0, Steals = 0, TimesRobbed = 0 },
 	}

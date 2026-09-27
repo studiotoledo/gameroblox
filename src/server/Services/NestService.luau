@@ -15,7 +15,7 @@ local function spawnNext(nest)
 		return
 	end
 	local zone = nest.Zone
-	local rarity = Util.weightedKey(zone.Config.Weights, rng)
+	local rarity = Util.weightedKey(S.EventService.adjustWeights(zone.Config.Weights), rng)
 	local pool = KaijuData.ByRarity[rarity]
 	if not pool then
 		return

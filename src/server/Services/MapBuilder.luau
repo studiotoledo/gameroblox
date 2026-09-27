@@ -308,9 +308,50 @@ local function buildPlot(index: number, parent: Instance)
 		CanQuery = false,
 		Parent = model,
 	})
-	local _, ownerLabel = billboard(signPost, 0, UDim2.fromOffset(320, 60), 300)
-	ownerLabel.Text = "Base livre"
+	-- foto do dono + nome + renda por segundo
+	local ownerGui = Instance.new("BillboardGui")
+	ownerGui.Name = "OwnerSign"
+	ownerGui.Size = UDim2.fromOffset(260, 150)
+	ownerGui.LightInfluence = 0
+	ownerGui.MaxDistance = 400
+	ownerGui.Adornee = signPost
+	local avatar = Instance.new("ImageLabel")
+	avatar.Name = "Avatar"
+	avatar.AnchorPoint = Vector2.new(0.5, 0)
+	avatar.Position = UDim2.fromScale(0.5, 0)
+	avatar.Size = UDim2.fromOffset(72, 72)
+	avatar.BackgroundColor3 = color
+	avatar.Image = ""
+	avatar.Visible = false
+	local avatarCorner = Instance.new("UICorner")
+	avatarCorner.CornerRadius = UDim.new(1, 0)
+	avatarCorner.Parent = avatar
+	local avatarStroke = Instance.new("UIStroke")
+	avatarStroke.Thickness = 3
+	avatarStroke.Color = Color3.new(1, 1, 1)
+	avatarStroke.Parent = avatar
+	avatar.Parent = ownerGui
+	local ownerLabel = Instance.new("TextLabel")
+	ownerLabel.Position = UDim2.fromOffset(0, 76)
+	ownerLabel.Size = UDim2.new(1, 0, 0, 36)
+	ownerLabel.BackgroundTransparency = 1
+	ownerLabel.Font = Enum.Font.FredokaOne
+	ownerLabel.TextScaled = true
 	ownerLabel.TextColor3 = color
+	ownerLabel.TextStrokeTransparency = 0
+	ownerLabel.Text = "Base livre"
+	ownerLabel.Parent = ownerGui
+	local ownerIncome = Instance.new("TextLabel")
+	ownerIncome.Position = UDim2.fromOffset(0, 112)
+	ownerIncome.Size = UDim2.new(1, 0, 0, 30)
+	ownerIncome.BackgroundTransparency = 1
+	ownerIncome.Font = Enum.Font.FredokaOne
+	ownerIncome.TextScaled = true
+	ownerIncome.TextColor3 = Color3.fromRGB(120, 255, 140)
+	ownerIncome.TextStrokeTransparency = 0
+	ownerIncome.Text = ""
+	ownerIncome.Parent = ownerGui
+	ownerGui.Parent = signPost
 
 	return {
 		Index = index,
@@ -332,6 +373,8 @@ local function buildPlot(index: number, parent: Instance)
 		LockButton = lockButton,
 		LockLabel = lockLabel,
 		OwnerLabel = ownerLabel,
+		OwnerAvatar = avatar,
+		OwnerIncome = ownerIncome,
 		Owner = nil,
 		LockedUntil = 0,
 		Pending = 0,

@@ -181,6 +181,9 @@ function PlotService.assign(player: Player)
 			plot.LockedUntil = 0
 			plot.Model:SetAttribute("OwnerUserId", player.UserId)
 			plot.OwnerLabel.Text = "Base de " .. player.DisplayName
+			plot.OwnerAvatar.Image =
+				string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", math.max(player.UserId, 1))
+			plot.OwnerAvatar.Visible = true
 			plot.UpgradePrompt:SetAttribute("OnlyUserId", player.UserId)
 			plot.TrainPrompt:SetAttribute("OnlyUserId", player.UserId)
 			byPlayer[player] = plot
@@ -207,6 +210,8 @@ function PlotService.release(player: Player)
 	plot.LockedUntil = 0
 	plot.Model:SetAttribute("OwnerUserId", 0)
 	plot.OwnerLabel.Text = "Base livre"
+	plot.OwnerAvatar.Visible = false
+	plot.OwnerIncome.Text = ""
 	plot.UpgradePrompt:SetAttribute("OnlyUserId", 0)
 	plot.TrainPrompt:SetAttribute("OnlyUserId", 0)
 	for _, slot in plot.Slots do
@@ -236,8 +241,8 @@ local function isNear(player: Player, part: BasePart, range: number): boolean
 	return hrp ~= nil and (hrp.Position - part.Position).Magnitude <= range
 end
 
-function PlotService.upgradeTreadmill(player: Player, plot)
-	if plot.Owner ~= player or not isNear(player, plot.UpgradePrompt.Parent :: BasePart, 16) then
+function PlotService.upgradeTreadmill(player: Player, plot, fromMenu: boolean?)
+	if plot.Owner ~= player or (not fromMenu and not isNear(player, plot.UpgradePrompt.Parent :: BasePart, 16)) then
 		return
 	end
 	local data = S.DataService.get(player)
@@ -393,6 +398,9 @@ function PlotService.Start()
 			for _, plot in plots do
 				refreshLock(plot)
 				refreshCollector(plot)
+				if plot.Owner then
+					plot.OwnerIncome.Text = Format.money(plot.Owner:GetAttribute("Income") or 0) .. "/s"
+				end
 			end
 		end
 	end)

@@ -38,6 +38,7 @@ local function onAdded(player: Player)
 	player:SetAttribute("Carrying", "")
 	player:SetAttribute("Income", 0)
 	S.EconomyService.setup(player)
+	S.RewardsService.setup(player)
 
 	local offline = 0
 	if data.LastOnline > 0 then

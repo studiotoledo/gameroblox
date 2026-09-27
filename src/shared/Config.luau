@@ -192,4 +192,30 @@ Config.NestRespawn = { Min = 25, Max = 45 } -- segundos até o ninho ganhar outr
 Config.NestLifetime = 120 -- filhote não roubado some depois disso
 Config.GuardScale = 3
 
+-- Renascimento: zera dinheiro, velocidade e esteira; cada um dá +IncomeBonus de renda para sempre.
+Config.Rebirth = { BaseCost = 1000000, CostGrowth = 6, IncomeBonus = 0.5 }
+
+function Config.rebirthCost(rebirths: number): number
+	return math.floor(Config.Rebirth.BaseCost * Config.Rebirth.CostGrowth ^ rebirths)
+end
+
+-- Presentes por tempo jogado e recompensa diária (valores em segundos de renda, com mínimo).
+Config.GiftInterval = 10 * 60
+Config.GiftIncomeSeconds = 90
+Config.GiftMinimum = 200
+Config.DailyIncomeSeconds = 60
+Config.DailyMinimum = 500
+Config.DailyMaxStreak = 7
+
+-- Bônus de renda
+Config.FriendBoost = 0.1 -- por amigo no mesmo servidor
+Config.MaxFriendBoost = 0.5
+Config.PremiumBoost = 0.1
+
+-- Evento "Hora dos Raros": raridades Épico ou melhor ficam Luck vezes mais comuns nos ninhos.
+Config.Event = { Name = "Hora dos Raros", Interval = 20 * 60, Duration = 3 * 60, Luck = 3 }
+
+-- Modo lento: velocidade máxima enquanto ativado (para mirar com precisão)
+Config.SlowModeSpeed = 20
+
 return Config

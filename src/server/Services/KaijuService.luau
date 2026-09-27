@@ -129,6 +129,15 @@ local function refreshBillboard(e)
 	else
 		gui.Grow.Text = "Cresce só na base"
 	end
+	-- dados lidos pelo painel "Vender" do cliente
+	local model = e.Model
+	model:SetAttribute("State", e.State)
+	model:SetAttribute("OwnerUserId", e.OwnerUserId or 0)
+	model:SetAttribute("KaijuName", displayName(e))
+	model:SetAttribute("Rarity", def.Rarity)
+	model:SetAttribute("StageName", Config.Stages[e.Stage].Name)
+	model:SetAttribute("Income", KaijuService.income(e))
+	model:SetAttribute("SellValue", math.floor(KaijuService.income(e) * Config.SellSeconds))
 end
 
 local function refreshBillboardOffset(e)
@@ -298,6 +307,22 @@ function KaijuService.removeEntity(e)
 	e.Model:Destroy()
 end
 
+-- Índice: registra que o jogador já teve esse kaiju
+function KaijuService.markDiscovered(player: Player, id: string)
+	local data = S.DataService.get(player)
+	if not data then
+		return
+	end
+	if not data.Discovered[id] then
+		data.Discovered[id] = true
+	end
+	local ids = {}
+	for known in data.Discovered do
+		table.insert(ids, known)
+	end
+	player:SetAttribute("Discovered", table.concat(ids, ","))
+end
+
 function KaijuService.placeInSlot(e, plot, index: number)
 	local slot = plot.Slots[index]
 	detach(e)
@@ -309,6 +334,7 @@ function KaijuService.placeInSlot(e, plot, index: number)
 	e.HomeUserId, e.HomePlot, e.HomeSlot, e.OriginZone, e.Nest = nil, nil, nil, nil, nil
 	e.Model:PivotTo(slot.CFrame)
 	e.Model.Parent = folder
+	KaijuService.markDiscovered(plot.Owner, e.Id)
 	refreshPrompts(e)
 	refreshBillboard(e)
 	refreshBillboardOffset(e)
@@ -519,14 +545,42 @@ function KaijuService.onPrompt(player: Player, e, action: string)
 	if action == "take" then
 		startCarry(player, e)
 	elseif action == "sell" then
-		if e.State ~= "Slot" or e.OwnerUserId ~= player.UserId then
-			return
+		KaijuService.sell(player, e)
+	end
+end
+
+function KaijuService.sell(player: Player, e): number
+	if entities[e.Uid] ~= e or e.State ~= "Slot" or e.OwnerUserId ~= player.UserId then
+		return 0
+	end
+	local value = sellValue(e)
+	local name = displayName(e)
+	KaijuService.removeEntity(e)
+	S.EconomyService.addCash(player, value)
+	S.Notify.send(player, "Vendeu " .. name .. " por " .. Format.money(value), "cash")
+	return value
+end
+
+function KaijuService.sellByUid(player: Player, uid: number)
+	local e = entities[uid]
+	if e then
+		KaijuService.sell(player, e)
+	end
+end
+
+function KaijuService.sellAll(player: Player)
+	local total, count = 0, 0
+	for _, e in entities do
+		if e.State == "Slot" and e.OwnerUserId == player.UserId then
+			local value = sellValue(e)
+			KaijuService.removeEntity(e)
+			total += value
+			count += 1
 		end
-		local value = sellValue(e)
-		local name = displayName(e)
-		KaijuService.removeEntity(e)
-		S.EconomyService.addCash(player, value)
-		S.Notify.send(player, "Vendeu " .. name .. " por " .. Format.money(value), "cash")
+	end
+	if count > 0 then
+		S.EconomyService.addCash(player, total)
+		S.Notify.send(player, string.format("Vendeu %d kaiju(s) por %s", count, Format.money(total)), "cash")
 	end
 end
 
@@ -697,7 +751,7 @@ local function incomeTick()
 	for _, e in entities do
 		if e.State == "Slot" and e.Plot and e.Plot.Owner then
 			local plot = e.Plot
-			local inc = KaijuService.income(e)
+			local inc = KaijuService.income(e) * (plot.Owner:GetAttribute("IncomeMult") or 1)
 			plot.Pending += inc
 			totals[plot] = (totals[plot] or 0) + inc
 			local gt = growTime(e)

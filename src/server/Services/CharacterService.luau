@@ -18,7 +18,11 @@ function CharacterService.refreshSpeed(player: Player)
 	if not hum or not data then
 		return
 	end
-	hum.WalkSpeed = (Config.BaseWalkSpeed + data.SpeedStat) * S.KaijuService.getCarryMultiplier(player)
+	local speed = (Config.BaseWalkSpeed + data.SpeedStat) * S.KaijuService.getCarryMultiplier(player)
+	if player:GetAttribute("SlowMode") then
+		speed = math.min(speed, Config.SlowModeSpeed)
+	end
+	hum.WalkSpeed = speed
 end
 
 local function onCharacter(player: Player, char: Model)
