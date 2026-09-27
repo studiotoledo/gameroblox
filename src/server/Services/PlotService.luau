@@ -7,11 +7,13 @@ local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Format)
+local Remotes = require(ReplicatedStorage.Shared.Remotes)
 
 local PlotService = {}
 local S
 local plots
 local byPlayer: { [Player]: any } = {}
+local training: { [Player]: any } = {} -- jogador -> base onde está correndo
 
 local LOCKED_COLOR = Color3.fromRGB(60, 60, 65)
 local UNLOCKED_COLOR = Color3.fromRGB(95, 95, 110)
@@ -23,7 +25,22 @@ function PlotService.Init(services)
 		plot.UpgradePrompt.Triggered:Connect(function(player)
 			PlotService.upgradeTreadmill(player, plot)
 		end)
+		plot.TrainPrompt.Triggered:Connect(function(player)
+			if training[player] then
+				PlotService.stopTraining(player)
+			else
+				PlotService.startTraining(player, plot)
+			end
+		end)
 	end
+	Remotes.get("Treadmill").OnServerEvent:Connect(function(player, action)
+		if action == "stop" then
+			PlotService.stopTraining(player)
+		end
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		training[player] = nil
+	end)
 end
 
 function PlotService.getPlot(player: Player)
@@ -165,6 +182,7 @@ function PlotService.assign(player: Player)
 			plot.Model:SetAttribute("OwnerUserId", player.UserId)
 			plot.OwnerLabel.Text = "Base de " .. player.DisplayName
 			plot.UpgradePrompt:SetAttribute("OnlyUserId", player.UserId)
+			plot.TrainPrompt:SetAttribute("OnlyUserId", player.UserId)
 			byPlayer[player] = plot
 			player:SetAttribute("PlotIndex", plot.Index)
 			PlotService.refreshSlots(plot)
@@ -182,6 +200,7 @@ function PlotService.release(player: Player)
 	if not plot then
 		return
 	end
+	PlotService.stopTraining(player)
 	byPlayer[player] = nil
 	plot.Owner = nil
 	plot.Pending = 0
@@ -189,6 +208,7 @@ function PlotService.release(player: Player)
 	plot.Model:SetAttribute("OwnerUserId", 0)
 	plot.OwnerLabel.Text = "Base livre"
 	plot.UpgradePrompt:SetAttribute("OnlyUserId", 0)
+	plot.TrainPrompt:SetAttribute("OnlyUserId", 0)
 	for _, slot in plot.Slots do
 		slot.Entity = nil
 	end
@@ -255,8 +275,43 @@ function PlotService.unlockSlot(player: Player, plot)
 	S.Notify.send(player, "Novo espaço desbloqueado na sua base!", "success")
 end
 
-local function isFree(player: Player): boolean
-	return not S.KaijuService.isCarrying(player)
+-- Esteira automática: o boneco fica preso na esteira correndo sozinho (animação no cliente)
+-- e ganha velocidade até o jogador sair (pulo, botão ou prompt de novo).
+function PlotService.startTraining(player: Player, plot)
+	if plot.Owner ~= player or training[player] then
+		return
+	end
+	if S.KaijuService.isCarrying(player) then
+		S.Notify.send(player, "Guarde o kaiju antes de correr na esteira.", "warn")
+		return
+	end
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not hrp or not hum or hum.Health <= 0 or not isNear(player, plot.TrainPrompt.Parent :: BasePart, 16) then
+		return
+	end
+	training[player] = plot
+	char:PivotTo(plot.TrainCFrame)
+	hrp.Anchored = true
+	player:SetAttribute("Training", true)
+end
+
+function PlotService.stopTraining(player: Player)
+	if not training[player] then
+		return
+	end
+	training[player] = nil
+	player:SetAttribute("Training", false)
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if hrp then
+		hrp.Anchored = false
+	end
+end
+
+function PlotService.isTraining(player: Player): boolean
+	return training[player] ~= nil
 end
 
 local function onStep(dt: number)
@@ -283,14 +338,8 @@ local function onStep(dt: number)
 				end
 			end
 
-			-- esteira (só enquanto não carrega nada)
-			local tRel = plot.TreadmillCenter:PointToObjectSpace(hrp.Position)
-			if
-				math.abs(tRel.X) <= plot.TreadmillSize.X / 2
-				and math.abs(tRel.Z) <= plot.TreadmillSize.Z / 2
-				and tRel.Y < 6
-				and isFree(owner)
-			then
+			-- esteira
+			if training[owner] == plot then
 				local data = S.DataService.get(owner)
 				if data then
 					S.EconomyService.addSpeed(owner, Config.treadmillRate(data.TreadmillLevel) * dt)
@@ -333,7 +382,7 @@ function PlotService.Start()
 	local acc = 0
 	RunService.Heartbeat:Connect(function(dt)
 		acc += dt
-		if acc >= 0.2 then
+		if acc >= 0.1 then
 			onStep(acc)
 			acc = 0
 		end

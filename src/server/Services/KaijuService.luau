@@ -9,6 +9,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Format)
 local KaijuData = require(ReplicatedStorage.Shared.KaijuData)
 local KaijuModel = require(ReplicatedStorage.Shared.KaijuModel)
+local Remotes = require(ReplicatedStorage.Shared.Remotes)
 
 local KaijuService = {}
 local S
@@ -258,6 +259,9 @@ local function giveCarryTool(player: Player, e)
 	tool.RequiresHandle = false
 	tool.CanBeDropped = false
 	tool:SetAttribute(CARRY_TOOL_ATTRIBUTE, true)
+	tool.Activated:Connect(function()
+		KaijuService.dropByPlayer(player)
+	end)
 	tool.Parent = backpack
 end
 
@@ -380,6 +384,17 @@ function KaijuService.drop(player: Player, reason: string?)
 	end)
 end
 
+-- O jogador larga o kaiju de propósito (tecla G, botão do HUD ou clique com o item da hotbar).
+function KaijuService.dropByPlayer(player: Player)
+	local e = carrying[player]
+	if not e then
+		return
+	end
+	local name = displayName(e)
+	KaijuService.drop(player, "manual")
+	S.Notify.send(player, "Você largou " .. name .. ".", "info")
+end
+
 local function attach(e, hrp: BasePart)
 	local root = e.Model.PrimaryPart
 	e.Model:PivotTo(hrp.CFrame * CFrame.new(0, 3.2, 0))
@@ -400,7 +415,7 @@ local function startCarry(player: Player, e)
 	local char = player.Character
 	local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
-	if not hrp or not hum or hum.Health <= 0 then
+	if not hrp or not hum or hum.Health <= 0 or S.PlotService.isTraining(player) then
 		return
 	end
 	-- validação de distância no servidor (prompts podem ser disparados por exploit)
@@ -734,6 +749,9 @@ end
 function KaijuService.Init(services)
 	S = services
 	folder = services.Map.KaijuFolder
+	Remotes.get("DropKaiju").OnServerEvent:Connect(function(player)
+		KaijuService.dropByPlayer(player)
+	end)
 end
 
 function KaijuService.Start()

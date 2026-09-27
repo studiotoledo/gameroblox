@@ -7,7 +7,7 @@ Config.AutosaveInterval = 120
 
 -- Jogador
 Config.BaseWalkSpeed = 16
-Config.MaxSpeedStat = 200
+Config.MaxSpeedStat = 400
 Config.StartingCash = 0
 
 -- Bases
@@ -32,11 +32,11 @@ Config.SlapRange = 8
 
 -- Esteira
 Config.Treadmill = {
-	BaseRate = 0.12, -- velocidade ganha por segundo no nível 0
-	RatePerLevel = 0.06,
-	MaxLevel = 15,
+	BaseRate = 0.12, -- velocidade ganha por segundo no nível 1
+	RatePerLevel = 0.08,
+	MaxLevel = 25,
 	CostBase = 75,
-	CostGrowth = 2.1,
+	CostGrowth = 1.85,
 }
 
 function Config.treadmillRate(level: number): number
@@ -117,7 +117,9 @@ end
 
 -- Zonas, da mais perto da base para a mais longe. Z = distância a partir das bases.
 -- RequiredSpeed: velocidade (16 + treino) mínima para passar pelo portal da zona.
--- GuardSpeed fica acima do mínimo: só entrar não basta, é preciso treinar para fugir.
+-- GuardSpeed (segredo para o jogador): sempre acima do mínimo da própria zona, então quem
+-- acabou de liberar a zona é mais lento que o guardião; e o mínimo da zona seguinte fica
+-- bem acima do guardião anterior, então avançar de zona exige muito treino.
 -- Weights: chance de cada raridade nascer num ninho da zona (cada zona tem o "seu" nível).
 Config.Zones = {
 	{
@@ -128,7 +130,7 @@ Config.Zones = {
 		Material = Enum.Material.Sand,
 		Nests = 8,
 		RequiredSpeed = 0,
-		GuardSpeed = 17,
+		GuardSpeed = 22,
 		Guards = 1,
 		Weights = { Comum = 90, Incomum = 10 },
 	},
@@ -139,8 +141,8 @@ Config.Zones = {
 		Color = Color3.fromRGB(90, 160, 70),
 		Material = Enum.Material.Grass,
 		Nests = 8,
-		RequiredSpeed = 30,
-		GuardSpeed = 36,
+		RequiredSpeed = 40,
+		GuardSpeed = 55,
 		Guards = 2,
 		Weights = { Comum = 20, Incomum = 70, Raro = 10 },
 	},
@@ -151,8 +153,8 @@ Config.Zones = {
 		Color = Color3.fromRGB(60, 50, 50),
 		Material = Enum.Material.Basalt,
 		Nests = 7,
-		RequiredSpeed = 55,
-		GuardSpeed = 64,
+		RequiredSpeed = 80,
+		GuardSpeed = 100,
 		Guards = 2,
 		Weights = { Incomum = 15, Raro = 70, ["Épico"] = 15 },
 	},
@@ -163,8 +165,8 @@ Config.Zones = {
 		Color = Color3.fromRGB(200, 230, 245),
 		Material = Enum.Material.Glacier,
 		Nests = 7,
-		RequiredSpeed = 85,
-		GuardSpeed = 98,
+		RequiredSpeed = 140,
+		GuardSpeed = 170,
 		Guards = 3,
 		Weights = { Raro = 10, ["Épico"] = 65, ["Lendário"] = 22, ["Mítico"] = 3 },
 	},
@@ -175,8 +177,8 @@ Config.Zones = {
 		Color = Color3.fromRGB(45, 25, 70),
 		Material = Enum.Material.Slate,
 		Nests = 6,
-		RequiredSpeed = 125,
-		GuardSpeed = 142,
+		RequiredSpeed = 220,
+		GuardSpeed = 260,
 		Guards = 3,
 		Weights = { ["Lendário"] = 62, ["Mítico"] = 32, Secreto = 6 },
 	},

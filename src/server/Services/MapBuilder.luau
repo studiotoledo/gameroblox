@@ -154,6 +154,18 @@ local function buildPlot(index: number, parent: Instance)
 	wall(Vector3.new(seg, wallH, wallT), at(-(gap / 2 + seg / 2), wy, d / 2 - wallT / 2))
 	wall(Vector3.new(seg, wallH, wallT), at(gap / 2 + seg / 2, wy, d / 2 - wallT / 2))
 
+	-- extensão invisível das paredes: impede pular por cima para entrar na base
+	local tallH = 60
+	local ty = PLOT_FLOOR_TOP + wallH + tallH / 2
+	local function tallWall(size: Vector3, cf: CFrame)
+		part({ Name = "WallGuard", Size = size, CFrame = cf, Transparency = 1, CanQuery = false, Parent = model })
+	end
+	tallWall(Vector3.new(w, tallH, wallT), at(0, ty, -d / 2 + wallT / 2))
+	tallWall(Vector3.new(wallT, tallH, d), at(-w / 2 + wallT / 2, ty, 0))
+	tallWall(Vector3.new(wallT, tallH, d), at(w / 2 - wallT / 2, ty, 0))
+	tallWall(Vector3.new(seg, tallH, wallT), at(-(gap / 2 + seg / 2), ty, d / 2 - wallT / 2))
+	tallWall(Vector3.new(seg, tallH, wallT), at(gap / 2 + seg / 2, ty, d / 2 - wallT / 2))
+
 	-- laser da porta (fica visível quando a base está trancada)
 	local barrier = part({
 		Name = "Barrier",
@@ -201,7 +213,7 @@ local function buildPlot(index: number, parent: Instance)
 		end
 	end
 
-	-- esteira: o jogador corre para -X e a esteira empurra para +X
+	-- esteira: o jogador ativa pelo prompt e o boneco corre sozinho virado para -X
 	local treadmillCenter = at(-24, PLOT_FLOOR_TOP, -21)
 	part({
 		Name = "TreadmillBase",
@@ -219,7 +231,8 @@ local function buildPlot(index: number, parent: Instance)
 		Material = Enum.Material.Fabric,
 		Parent = model,
 	})
-	belt.AssemblyLinearVelocity = origin:VectorToWorldSpace(Vector3.new(14, 0, 0))
+	local trainPrompt = prompt(belt, "Correr na esteira", "⚡ Ganhe velocidade", 0)
+	trainPrompt.MaxActivationDistance = 12
 	for _, sz in { -1, 1 } do
 		part({
 			Name = "TreadmillRail",
@@ -310,7 +323,8 @@ local function buildPlot(index: number, parent: Instance)
 		Barrier = barrier,
 		Belt = belt,
 		TreadmillCenter = treadmillCenter,
-		TreadmillSize = Vector3.new(12, 0, 6),
+		TrainCFrame = treadmillCenter * CFrame.new(0.5, 4.7, 0) * CFrame.Angles(0, math.pi / 2, 0),
+		TrainPrompt = trainPrompt,
 		TreadmillLabel = treadmillLabel,
 		UpgradePrompt = upgradePrompt,
 		Collector = collector,
