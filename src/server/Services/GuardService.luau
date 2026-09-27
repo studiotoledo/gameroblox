@@ -34,7 +34,7 @@ local function buildGuard(zone, number: number)
 	label.TextScaled = true
 	label.TextColor3 = Color3.fromRGB(255, 80, 80)
 	label.TextStrokeTransparency = 0
-	label.Text = string.format("👑 %s  ⚡%d", def.Name, zone.Config.GuardSpeed)
+	label.Text = "👑 " .. def.Name
 	label.Parent = bb
 	bb.Parent = model.PrimaryPart
 

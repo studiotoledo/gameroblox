@@ -546,13 +546,7 @@ local function buildZone(index: number, zone, parent: Instance)
 		local requirement = if zone.RequiredSpeed > 0
 			then string.format("⚡ Precisa de velocidade %d", zone.RequiredSpeed)
 			else "Entrada livre"
-		label.Text = string.format(
-			"ZONA %d • %s\n%s • Guardião %d",
-			index,
-			string.upper(zone.Name),
-			requirement,
-			zone.GuardSpeed
-		)
+		label.Text = string.format("ZONA %d • %s\n%s", index, string.upper(zone.Name), requirement)
 		label.Parent = gui
 		gui.Parent = beam
 	end
@@ -682,24 +676,33 @@ function MapBuilder.build()
 	local half = Config.MapHalfWidth
 	local lastZone = Config.Zones[#Config.Zones]
 	local minZ, maxZ = -60, lastZone.ZEnd + 10
-	part({
-		Name = "Ground",
-		Size = Vector3.new(half * 2, 4, maxZ - minZ),
-		CFrame = CFrame.new(0, -2, (minZ + maxZ) / 2),
-		Color = Color3.fromRGB(95, 100, 110),
-		Material = Enum.Material.Asphalt,
-		Parent = map,
-	})
-	-- paredes invisíveis nas bordas
+	-- O Roblox limita cada peça a 2048 studs por eixo; peças maiores são encolhidas
+	-- (foi isso que fez o chão "sumir"). Por isso chão e paredes são feitos em faixas.
+	local STRIP = 500
 	local wallH = 60
-	for _, sx in { -1, 1 } do
+	local z0 = minZ
+	while z0 < maxZ do
+		local z1 = math.min(z0 + STRIP, maxZ)
+		local mid = (z0 + z1) / 2
 		part({
-			Name = "Boundary",
-			Size = Vector3.new(2, wallH, maxZ - minZ),
-			CFrame = CFrame.new(sx * (half + 1), wallH / 2, (minZ + maxZ) / 2),
-			Transparency = 1,
+			Name = "Ground",
+			Size = Vector3.new(half * 2, 4, z1 - z0),
+			CFrame = CFrame.new(0, -2, mid),
+			Color = Color3.fromRGB(95, 100, 110),
+			Material = Enum.Material.Asphalt,
 			Parent = map,
 		})
+		-- paredes invisíveis nas bordas
+		for _, sx in { -1, 1 } do
+			part({
+				Name = "Boundary",
+				Size = Vector3.new(2, wallH, z1 - z0),
+				CFrame = CFrame.new(sx * (half + 1), wallH / 2, mid),
+				Transparency = 1,
+				Parent = map,
+			})
+		end
+		z0 = z1
 	end
 	for _, z in { minZ - 1, maxZ + 1 } do
 		part({
